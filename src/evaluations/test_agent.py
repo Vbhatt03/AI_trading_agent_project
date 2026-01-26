@@ -8,7 +8,7 @@ sys.path.insert(0, str(project_root))
 import pandas as pd
 from stable_baselines3 import PPO
 from src.env.trading_env import TradingEnv
-
+from src.llm.explainer import explain_trade
 df = pd.read_csv(project_root / "src" / "data" / "extracted_data" / "aapl_features.csv")
 
 env = TradingEnv(df)
@@ -22,11 +22,17 @@ total_reward = 0
 portfolio_values = []
 
 prices = df["Close"].values
-
+step_count=0
 
 while True:
     action, _ = model.predict(obs)
+    # Only call LLM every 50 steps OR when action is not hold
+    if step_count % 200 == 0:
+        explanation = explain_trade(obs, int(action))
+        print("\n--- LLM Reasoning ---")
+        print(explanation)
     obs, reward, done, _, _ = env.step(action)
+    step_count+=1
     portfolio_values.append(env.net_worth)
     total_reward += reward
     

@@ -10,10 +10,10 @@ class TradingEnv(gym.Env):
         self.df = df.reset_index(drop=True)
         self.current_step = 0
 
-        self.action_space = spaces.Discrete(3)
+        self.action_space = spaces.Discrete(7)
 
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(6,), dtype=np.float32
+            low=-np.inf, high=np.inf, shape=(10,), dtype=np.float32
         )
 
         self.balance = 10000
@@ -29,6 +29,10 @@ class TradingEnv(gym.Env):
             row["ma20"],
             row["ma50"],
             row["returns"],
+            row["macd"],
+            row["volatility"],
+            row["momentum"],
+            row["volume_change"],
             self.position
         ], dtype=np.float32)
 
@@ -36,27 +40,41 @@ class TradingEnv(gym.Env):
 
     def step(self, action):
         current_price = self.df.iloc[self.current_step]["Close"]
-        transaction_cost = 0.001 * current_price
 
-        if action == 1 and self.balance > current_price:
-            self.position = 1
-            self.balance -= current_price
-            self.balance -= transaction_cost
+        trade_fraction = 0
+        if action == 1:
+            trade_fraction = 0.25
+        elif action == 2:
+            trade_fraction = 0.50
+        elif action == 3:
+            trade_fraction = 1.0
+        elif action == 4:
+            trade_fraction = -0.25
+        elif action == 5:
+            trade_fraction = -0.50
+        elif action == 6:
+            trade_fraction = -1.0
 
-        elif action == 2 and self.position == 1:
-            self.position = 0
-            self.balance += current_price
-            self.balance -= transaction_cost
+        position_change = trade_fraction
+
+        transaction_cost = 0.001 * abs(position_change) * current_price
+
+        self.position += position_change
+        self.position = max(min(self.position, 1), 0)
 
         prev_worth = self.net_worth
-        self.net_worth = self.balance + self.position * current_price
 
-        reward = (self.net_worth - prev_worth)/prev_worth
+        self.net_worth = self.balance + self.position * current_price - transaction_cost
+
+        reward = 100 * (self.net_worth - prev_worth) / prev_worth
+
+
 
         self.current_step += 1
         done = self.current_step >= len(self.df) - 1
 
         return self._next_observation(), reward, done, False, {}
+
 
     def reset(self, seed=None):
         self.current_step = 0

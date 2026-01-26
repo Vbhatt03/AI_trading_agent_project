@@ -9,7 +9,7 @@ import pandas as pd
 from stable_baselines3 import PPO
 from src.env.trading_env import TradingEnv
 
-df = pd.read_csv(project_root / "src" / "data" / "extracted_data" / "aapl_features.csv", index_col=0)
+df = pd.read_csv(project_root / "src" / "data" / "extracted_data" / "aapl_features.csv")
 df = df.rename(columns={"Price": "Date"})
 
 train = df[df["Date"] < "2022-01-01"]
@@ -20,7 +20,7 @@ test_env = TradingEnv(test)
 
 model = PPO("MlpPolicy", train_env, verbose=1)
 
-model.learn(total_timesteps=100000)
+model.learn(total_timesteps=500000)
 
 model.save(project_root / "src" / "agents" / "ppo_trading")
 
