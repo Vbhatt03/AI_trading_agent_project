@@ -39,4 +39,16 @@ def action_to_text(action):
         5: "Sell 50%",
         6: "Sell all holdings"
     }
+    # Ensure action is hashable (convert numpy array to int or tuple)
+    try:
+        import numpy as np
+        if isinstance(action, np.ndarray):
+            if action.size == 1:
+                action = int(action.item())
+            else:
+                action = tuple(action.tolist())
+    except ImportError:
+        pass
+    except Exception:
+        pass
     return mapping.get(action, "Unknown action")

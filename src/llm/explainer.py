@@ -1,5 +1,6 @@
 import requests
 from src.llm.state_formatter import format_state_for_llm, action_to_text
+from src.rag.memory_store import memory
 
 
 def local_llm(prompt):
@@ -16,28 +17,53 @@ def local_llm(prompt):
 def explain_trade(obs, action):
     state_text, _ = format_state_for_llm(obs)
     action_text = action_to_text(action)
-
+    retrieved = memory.retrieve(state_text, k=2)
+    memory_context = "\n".join(retrieved)
+    # price = float(obs[0])
+    rsi = float(obs[1])
+    short_ma = float(obs[2])
+    long_ma = float(obs[3])
+    momentum = float(obs[4])
+    macd = float(obs[5])
+    vol = float(obs[6])
+    volume = float(obs[8])
+    trend = "Uptrend" if short_ma > long_ma else "Downtrend"
 
     prompt = f"""
-You are a quantitative trading analyst evaluating an AI trading agent's action.
+You are evaluating whether the trading agent's action is ALIGNED or in CONFLICT with market conditions.
 
-{state_text}
+You MUST follow this reasoning order:
 
-Action taken: {action_text}
+1) FIRST examine the PAST SIMILAR HISTORICAL CASES below.
+   These are actual past outcomes from this trading system.
+   Treat them as empirical evidence.
 
-Follow these instructions exactly:
+2) Determine if current market conditions resemble any past cases.
 
-1. Decide if the action is ALIGNED or CONFLICT with the indicators.
-2. Use ONLY the provided indicators.
-3. Be analytical, neutral, and risk-aware.
-4. Maximum 3 short sentences in reasoning.
-5. Do not add extra formatting or markdown.
+3) If past cases show negative outcomes after similar actions, this is strong evidence of CONFLICT.
+   If past cases show positive outcomes, this is evidence of ALIGNED.
 
-Output must be EXACTLY in this format:
+4) ONLY AFTER using historical evidence, use technical indicators (RSI, MACD, trend, etc.) as secondary confirmation.
 
-Verdict: ALIGNED or CONFLICT
-Reasoning: <2-3concise analytical sentences>
-Risk: <one short risk sentence>
+PAST SIMILAR HISTORICAL CASES:
+{memory_context}
+
+CURRENT MARKET STATE:
+RSI: {rsi}
+MACD: {macd}
+Trend: {trend}
+Volatility: {vol}
+Short-term Momentum: {momentum}
+Volume Change: {volume}
+
+AGENT ACTION:
+{action}
+
+Respond strictly in this format:
+
+Verdict: ALIGNED or CONFLICT  
+Reasoning: Explain primarily using past case outcomes, then indicators.  
+Risk: Brief risk assessment.
 """
 
 
