@@ -15,11 +15,19 @@ def local_llm(prompt):
     return response.json()["response"]
 
 def explain_trade(obs, action):
-    state_text, _ = format_state_for_llm(obs)
+    state_text, current_state_summary = format_state_for_llm(obs)
     action_text = action_to_text(action)
-    retrieved = memory.retrieve(state_text, k=2)
-    memory_context = "\n".join(retrieved)
-    # price = float(obs[0])
+    relevant_memories = memory.retrieve(state_text, k=5)
+    
+    # If not enough memories, skip LLM call
+    if len(relevant_memories) < 3:
+        return "Insufficient historical data. Building memory..."
+    
+    # Number and format memories for explicit citation
+    memory_context = ""
+    for i, mem in enumerate(relevant_memories, 1):
+        memory_context += f"[Case {i}]\n{mem}\n\n"
+    
     rsi = float(obs[1])
     short_ma = float(obs[2])
     long_ma = float(obs[3])
@@ -27,43 +35,30 @@ def explain_trade(obs, action):
     macd = float(obs[5])
     vol = float(obs[6])
     volume = float(obs[8])
+    exposure = float(obs[9])
     trend = "Uptrend" if short_ma > long_ma else "Downtrend"
 
     prompt = f"""
-You are evaluating whether the trading agent's action is ALIGNED or in CONFLICT with market conditions.
+CRITICAL INSTRUCTIONS:
+- You have {len(relevant_memories)} historical cases below
+- You MUST cite specific cases by number [Case 1], [Case 2], etc.
+- DO NOT make up case names or references
+- DO NOT use generic trading knowledge
+- If you cannot find similar cases, say "No similar historical cases"
 
-You MUST follow this reasoning order:
-
-1) FIRST examine the PAST SIMILAR HISTORICAL CASES below.
-   These are actual past outcomes from this trading system.
-   Treat them as empirical evidence.
-
-2) Determine if current market conditions resemble any past cases.
-
-3) If past cases show negative outcomes after similar actions, this is strong evidence of CONFLICT.
-   If past cases show positive outcomes, this is evidence of ALIGNED.
-
-4) ONLY AFTER using historical evidence, use technical indicators (RSI, MACD, trend, etc.) as secondary confirmation.
-
-PAST SIMILAR HISTORICAL CASES:
+=== HISTORICAL CASES ===
 {memory_context}
 
-CURRENT MARKET STATE:
-RSI: {rsi}
-MACD: {macd}
-Trend: {trend}
-Volatility: {vol}
-Short-term Momentum: {momentum}
-Volume Change: {volume}
+=== CURRENT STATE ===
+RSI {rsi:.1f}, MACD {macd:.2f}, {trend}, Vol {vol:.3f}, Momentum {momentum:.2f}, Exposure {exposure:.2f}
 
-AGENT ACTION:
-{action}
+ACTION: {action_text}
 
-Respond strictly in this format:
-
-Verdict: ALIGNED or CONFLICT  
-Reasoning: Explain primarily using past case outcomes, then indicators.  
-Risk: Brief risk assessment.
+RESPOND EXACTLY:
+Verdict: ALIGNED or CONFLICT
+Similar Cases: List case numbers that match current state
+Reasoning: Compare action/outcome from those specific cases
+Risk: High/Medium/Low based on case outcomes
 """
 
 

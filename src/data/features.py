@@ -6,7 +6,7 @@ from pathlib import Path
 # Get the directory where this script is located
 script_dir = Path(__file__).resolve().parent
 
-df = pd.read_csv(script_dir / "aapl.csv", skiprows=[1, 2])  # Skip the ticker and empty date rows
+df = pd.read_csv(script_dir / "spy.csv", skiprows=[1, 2])  # Skip the ticker and empty date rows
 
 # Ensure Close column is numeric
 df["Close"] = pd.to_numeric(df["Close"], errors="coerce")
@@ -22,5 +22,5 @@ df["momentum"] = df["Close"] - df["Close"].shift(10)
 df["volume_change"] = df["Volume"].pct_change()
 df.dropna(inplace=True)
 
-df.to_csv(script_dir / "extracted_data" / "aapl_features.csv", index=False)
+df.to_csv(script_dir / "extracted_data" / "spy_features.csv", index=False)
 print("Features created")

@@ -19,7 +19,7 @@ from src.env.trading_env import TradingEnv
 np.random.seed(42)
 random.seed(42)
 from src.llm.explainer import action_to_text, explain_trade
-df = pd.read_csv(project_root / "src" / "data" / "extracted_data" / "aapl_features.csv")
+df = pd.read_csv(project_root / "src" / "data" / "extracted_data" / "spy_features.csv")
 
 env = TradingEnv(df)
 obs, _ = env.reset(seed=42)
@@ -37,8 +37,8 @@ volatility = float(obs[6])
 while True:
     action, _ = model.predict(obs)
     action_name = action_to_text(action)
-    # Only call LLM every 200 steps OR when action is not hold
-    if step_count % 200 == 0:
+    # Only call LLM every 200 steps AND only after enough memories built
+    if step_count % 200 == 0 and len(memory.memories) >= 10:
         explanation = explain_trade(obs, int(action))
         print("\n--- LLM Reasoning ---")
         print(explanation)
@@ -50,9 +50,15 @@ while True:
 
     if step_count % 20 == 0 and len(reward_buffer) >= 20:
         WINDOW = 50
-        future_return = sum(reward_buffer[-WINDOW:])
+        # Calculate true portfolio return instead of summing distorted rewards
+        portfolio_values.append(env.net_worth)
+        if len(portfolio_values) >= WINDOW:
+            true_return = (portfolio_values[-1] - portfolio_values[-WINDOW]) / max(portfolio_values[-WINDOW], 1e-6)
+        else:
+            true_return = (env.net_worth - portfolio_values[0]) / max(portfolio_values[0], 1e-6)
+        
         vol = max(volatility, 1e-6)
-        signal_strength = future_return / vol
+        signal_strength = true_return / vol if vol > 1e-6 else 0
         print("YOUR RL AGENT DECIDED TO: " + action_name)
         is_hold = action_name.lower() == "hold position"
         if is_hold:
@@ -76,20 +82,33 @@ while True:
                 outcome_desc = "Sharp adverse move / drawdown followed"
 
 
+        rsi = obs[1]
+        vol = obs[6]
+        exposure = obs[9]
+
+        if rsi > 65 and trend == "Uptrend":
+            regime = "Overbought uptrend"
+        elif rsi < 35 and trend == "Downtrend":
+            regime = "Oversold downtrend"
+        elif vol > 0.03:
+            regime = "High volatility"
+        else:
+            regime = "Neutral regime"
+
         summary = f"""
-        Market Regime:
-        {trend}, RSI {obs[1]:.1f}, MACD {obs[5]:.2f}, Volatility {obs[6]:.3f}.
+Market Regime:
+Trend {trend}, RSI {rsi:.1f}, MACD {obs[5]:.2f}, Vol {vol:.3f}, Exposure {exposure:.2f}
 
-        Agent Action:
-        {action_name}
+Agent Action:
+{action_name}
 
-        Outcome:
-        {outcome_desc}. 20-step return = {future_return:.4f}.
-        """
+Outcome:
+{outcome_desc}. {WINDOW}-step return = {true_return:.4f}.
+"""
+
 
         memory.add(summary)
         print(f"[MEMORY SIZE]: {len(memory.memories)}")
-        portfolio_values.append(env.net_worth)
         total_reward += reward
     
     if done:
