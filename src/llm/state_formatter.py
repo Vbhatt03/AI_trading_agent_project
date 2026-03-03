@@ -31,13 +31,11 @@ Market Indicators:
     return description, state
 def action_to_text(action):
     mapping = {
-        0: "Hold position",
-        1: "Buy 25% more",
-        2: "Buy 50% more",
-        3: "Buy 100% (full allocation)",
-        4: "Sell 25%",
-        5: "Sell 50%",
-        6: "Sell all holdings"
+        0: "Target 0% exposure (exit all)",
+        1: "Target 25% exposure",
+        2: "Target 50% exposure",
+        3: "Target 75% exposure",
+        4: "Target 100% exposure (fully invested)"
     }
     # Ensure action is hashable (convert numpy array to int or tuple)
     try:

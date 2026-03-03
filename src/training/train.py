@@ -20,7 +20,7 @@ test_env = TradingEnv(test)
 
 model = PPO("MlpPolicy", train_env, verbose=1)
 
-model.learn(total_timesteps=500000)
+model.learn(total_timesteps=1000000)
 
 model.save(project_root / "src" / "agents" / "ppo_trading")
 

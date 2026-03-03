@@ -5,7 +5,8 @@ from sentence_transformers import SentenceTransformer
 class MemoryStore:
     def __init__(self):
         self.embedder = SentenceTransformer("all-MiniLM-L6-v2")
-        self.index = faiss.IndexFlatL2(384)
+        self.embedding_dim = 384
+        self.index = faiss.IndexFlatL2(self.embedding_dim)
         self.memories = []
 
     def add(self, text):
@@ -18,4 +19,9 @@ class MemoryStore:
         D, I = self.index.search(np.array(emb).astype("float32"), k)
         # Only return valid indices (non-negative and within bounds)
         return [self.memories[i] for i in I[0] if 0 <= i < len(self.memories)]
+
+    def clear(self):
+        self.memories.clear()
+        self.index = faiss.IndexFlatL2(self.embedding_dim)
+
 memory = MemoryStore()

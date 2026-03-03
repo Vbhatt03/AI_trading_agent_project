@@ -7,7 +7,7 @@ def local_llm(prompt):
     response = requests.post(
         "http://localhost:11434/api/generate",
         json={
-            "model": "phi3",
+            "model": "qwen2.5:7b-instruct",
             "prompt": prompt,
             "stream": False
         }
@@ -20,8 +20,8 @@ def explain_trade(obs, action):
     relevant_memories = memory.retrieve(state_text, k=5)
     
     # If not enough memories, skip LLM call
-    if len(relevant_memories) < 3:
-        return "Insufficient historical data. Building memory..."
+    # if len(relevant_memories) < 3:
+    #     return "Insufficient historical data. Building memory..."
     
     # Number and format memories for explicit citation
     memory_context = ""
@@ -41,24 +41,30 @@ def explain_trade(obs, action):
     prompt = f"""
 CRITICAL INSTRUCTIONS:
 - You have {len(relevant_memories)} historical cases below
+- RSI interpretation (STANDARD):
+  * RSI < 30: Oversold (potential reversal up)
+  * RSI 30–70: Neutral range (no directional bias)
+  * RSI > 70: Overbought (potential reversal down)
+- MACD: Positive momentum = bullish, Negative = bearish
+- Momentum: Velocity of price movement (positive = uptrend, negative = downtrend)
+- Exposure: % of portfolio in the asset (higher = more risk)
+
 - You MUST cite specific cases by number [Case 1], [Case 2], etc.
-- DO NOT make up case names or references
-- DO NOT use generic trading knowledge
-- If you cannot find similar cases, say "No similar historical cases"
+- If no cases match current state, say "No similar historical cases"
+- Flag CONFLICT only if: (a) action contradicts strong signal, (b) exposure > 80%, or (c) recent reversal pattern detected
 
 === HISTORICAL CASES ===
 {memory_context}
 
 === CURRENT STATE ===
-RSI {rsi:.1f}, MACD {macd:.2f}, {trend}, Vol {vol:.3f}, Momentum {momentum:.2f}, Exposure {exposure:.2f}
+RSI {rsi:.1f}, MACD {macd:.2f}, {trend}, Vol {vol:.3f}, Momentum {momentum:.2f}, Exposure {exposure:.2%}
 
 ACTION: {action_text}
 
 RESPOND EXACTLY:
 Verdict: ALIGNED or CONFLICT
-Similar Cases: List case numbers that match current state
-Reasoning: Compare action/outcome from those specific cases
-Risk: High/Medium/Low based on case outcomes
+Reasoning: Explain using specific cases and metrics
+Risk: HIGH (exposure > 80% or reversal signs) / MEDIUM / LOW
 """
 
 

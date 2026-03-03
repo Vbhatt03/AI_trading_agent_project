@@ -7,9 +7,8 @@ import random
 # Add the project root to Python path
 project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(project_root))
-from src.rag.memory_store import MemoryStore
-
-memory = MemoryStore()
+from src.rag.memory_store import memory
+from src.llm.state_formatter import format_state_for_llm, action_to_text
 
 import pandas as pd
 from stable_baselines3 import PPO
@@ -26,6 +25,16 @@ obs, _ = env.reset(seed=42)
 
 model = PPO.load(project_root / "src" / "agents" / "ppo_trading")
 
+memory.clear()
+
+model_action_n = getattr(model.action_space, "n", None)
+env_action_n = env.action_space.n
+if model_action_n is not None and model_action_n != env_action_n:
+    print(
+        f"[WARN] Model action space ({model_action_n}) != env action space ({env_action_n}). "
+        "Applying safe clipping for compatibility."
+    )
+
 total_reward = 0
 
 portfolio_values = []
@@ -35,18 +44,31 @@ reward_buffer = []
 step_count=0
 volatility = float(obs[6])
 while True:
-    action, _ = model.predict(obs)
+    raw_action, _ = model.predict(obs)
+    if isinstance(raw_action, np.ndarray):
+        action = int(raw_action.item()) if raw_action.size == 1 else int(raw_action.flat[0])
+    else:
+        action = int(raw_action)
+
+    if action < 0 or action >= env_action_n:
+        clipped_action = int(np.clip(action, 0, env_action_n - 1))
+        print(f"[WARN] Invalid action {action} clipped to {clipped_action}")
+        action = clipped_action
+
     action_name = action_to_text(action)
-    # Only call LLM every 200 steps AND only after enough memories built
-    if step_count % 200 == 0 and len(memory.memories) >= 10:
-        explanation = explain_trade(obs, int(action))
-        print("\n--- LLM Reasoning ---")
-        print(explanation)
-    obs, reward, done, _, _ = env.step(action)
+    
+    # Step without conflict penalty (evaluate pure model performance)
+    obs, reward, done, _, _ = env.step(action, conflict_penalty=0.0)
     trend = "Uptrend" if obs[2] > obs[3] else "Downtrend"
 
     reward_buffer.append(reward)
     step_count += 1
+    
+    # Call LLM every 100 steps for monitoring/analysis only
+    if step_count % 100 == 0 and len(memory.memories) >= 10:
+        explanation = explain_trade(obs, action)
+        print("\n--- LLM Reasoning (Analysis Only) ---")
+        print(explanation)
 
     if step_count % 20 == 0 and len(reward_buffer) >= 20:
         WINDOW = 50
@@ -95,10 +117,10 @@ while True:
         else:
             regime = "Neutral regime"
 
-        summary = f"""
-Market Regime:
-Trend {trend}, RSI {rsi:.1f}, MACD {obs[5]:.2f}, Vol {vol:.3f}, Exposure {exposure:.2f}
-
+        # Get state description for better memory retrieval matching
+        state_text, _ = format_state_for_llm(obs)
+        
+        summary = f"""{state_text}
 Agent Action:
 {action_name}
 
